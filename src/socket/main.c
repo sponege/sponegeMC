@@ -1,16 +1,15 @@
-// Server side C/C++ program to demonstrate Socket
-// programming
+// Creates new threads for incoming connections (gets piped into handle_packet)
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <pthread.h>
 #include "../config.h"
-#include "handle_new_connections.h"
-
-#define true 1
-#define false 0
+#include "../logger/logger.h"
+#include "packet.h"
 
 struct socket_listener {
 	int server_fd, new_socket;
@@ -36,7 +35,7 @@ void createSocketListener(struct socket_listener *sock, uint16_t port) {
 	if (setsockopt(sock->server_fd, SOL_SOCKET,
 								SO_REUSEADDR | SO_REUSEPORT, &sock->opt,
 								sizeof(sock->opt))) {
-		perror("setsockopt");
+		log_error("setsockopt");
 		exit(EXIT_FAILURE);
 	}
 
@@ -48,11 +47,11 @@ void createSocketListener(struct socket_listener *sock, uint16_t port) {
 	if (bind(sock->server_fd, (struct sockaddr*)&sock->address,
 						sizeof(sock->address))
 			< 0) {
-			perror("bind failed");
+			log_error("bind failed");
 			exit(EXIT_FAILURE);
 	}
 	if (listen(sock->server_fd, 3) < 0) {
-			perror("listen");
+			log_error("listen");
 			exit(EXIT_FAILURE);
 	}
 }
@@ -63,7 +62,20 @@ int getNewSocketConnection(struct socket_listener *sock) {
 								(socklen_t*)&sock->addrlen);
 }
 
-void listen_for_incoming_connections() {
+void *handle_connection(void *arg) {
+	connection connection = {
+		.socket = *((int*) arg),
+		.state = HANDSHAKE
+	};
+	log_info("New connection! Socket descriptor: %i", connection.socket);
+
+	while (handle_packet(&connection)) {}
+
+	log_info("Closing connection... Socket descriptor: %i", connection.socket);
+	close(connection.socket);
+}
+
+void* listen_for_incoming_connections() {
 	struct socket_listener sock;
 	pthread_t tid;
 
@@ -74,12 +86,17 @@ void listen_for_incoming_connections() {
 		getNewSocketConnection(&sock);
 
 		if (sock.new_socket) {
-			pthread_create(&tid, NULL, handle_socket, sock.new_socket);
+			pthread_create(&tid, NULL, handle_connection, &sock.new_socket);
 		} else if (sock.new_socket < 0) {
-			puts("error lol");
+			log_error("error lol");
 		}
 
 	}
 
 	shutdown(sock.server_fd, SHUT_RDWR); // never reached but good to know
+}
+
+int main(int argc, char const* argv[]) {
+	log_info("Starting socket listener...");
+	listen_for_incoming_connections();
 }

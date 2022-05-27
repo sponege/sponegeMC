@@ -1,0 +1,10 @@
+{
+  "files.associations": {
+    "*.html.liquid": "html",
+    "*.html.handlebars": "html",
+    "*.xhtml.liquid": "html",
+    "*.xhtml.handlebars": "html",
+    "in.h": "c",
+    "string.h": "c"
+  }
+}
