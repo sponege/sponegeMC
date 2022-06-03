@@ -1,0 +1,6 @@
+make --dry-run --always-make --keep-going --print-directory
+make: Entering directory '/home/jordanp/sponegeMC'
+mkdir build
+cc -g src/socket/handshake.c src/socket/status.c src/socket/packet.c src/socket/main.c src/logger/logger.c -o build/sponegeMC 
+make: Leaving directory '/home/jordanp/sponegeMC'
+ 

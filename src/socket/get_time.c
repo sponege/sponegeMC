@@ -26,7 +26,7 @@ void *handle_socket(int socket) {
 int main(int argc, char const* argv[]) {
 	pthread_t tid;
 
-  pthread_create(&tid, NULL, listen_for_incoming_connections, 0);
+	pthread_create(&tid, NULL, listen_for_incoming_connections, 0);
 
 	while (1) {}
 }

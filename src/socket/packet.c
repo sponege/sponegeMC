@@ -56,18 +56,18 @@ char* readString(char** bufPtr) {
 	return str;
 }
 
-void writeByte(int byte, int socket) {
-	send(socket, &byte, 1, 0);
+void writeByte(int byte, int fd) {
+	fputc(fd, byte);
 }
 
-void writeVarInt(int value, int socket) {
+void writeVarInt(int value, int fd) {
 	while (true) {
 		if ((value & ~SEGMENT_BITS) == 0) {
 			writeByte(value, socket);
 			return;
 		}
 
-		writeByte((value & SEGMENT_BITS) | CONTINUE_BIT, socket);
+		writeByte((value & SEGMENT_BITS) | CONTINUE_BIT, fd);
 
 		// Note: >>> means that the sign bit is shifted with the rest of the number rather than being left alone
 		value = value >> 7;
@@ -97,7 +97,7 @@ bool handle_packet(connection* conn) {
 		switch (conn->state) {
 			case HANDSHAKE:
 				switch (packet_id) {
-					case 0: handle_handshake(conn, &bufPtr); break;
+					case 0: handle_handshake(conn, &bufPtr); handle_status_request(conn, &bufPtr); break;
 					default:
 						log_error("Invalid packet ID: %i", packet_id);
 						success = false;
