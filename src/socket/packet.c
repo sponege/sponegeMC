@@ -1,4 +1,4 @@
-// Handles an incoming socket conn
+// Handles an incoming socket connection
 
 #include <time.h>
 #include <stdio.h>
@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <string.h>
+#include <errno.h>
 
 #include "handshake.h"
 #include "status.h"
@@ -50,20 +51,20 @@ int readVarInt(char** bufPtr) {
 
 char* readString(char** bufPtr) {
 	unsigned int length = readVarInt(bufPtr);
-	char* str = malloc(length);
+	char* str = (char*)malloc(length);
 	memcpy(str, *bufPtr, length);
 	*bufPtr += length;
 	return str;
 }
 
-void writeByte(int byte, int fd) {
-	fputc(fd, byte);
+void writeByte(int byte, FILE* fd) {
+	fputc(byte, fd);
 }
 
-void writeVarInt(int value, int fd) {
+void writeVarInt(int value, FILE* fd) {
 	while (true) {
 		if ((value & ~SEGMENT_BITS) == 0) {
-			writeByte(value, socket);
+			writeByte(value, fd);
 			return;
 		}
 
@@ -75,35 +76,35 @@ void writeVarInt(int value, int fd) {
 }
 
 bool handle_packet(connection* conn) {
-	char* buffer = malloc(MAX_VARINT_LEN);
+	char* buffer = (char*)malloc(9999);
 	char* bufPtr = buffer;
 	bool success = true;
 
-	if (recv(conn->socket, bufPtr, MAX_VARINT_LEN, 0) == MAX_VARINT_LEN) {
+	ssize_t recvSize = recv(conn->socket, bufPtr, MAX_VARINT_LEN, 0);
+
+	log_pink("recieved %zi bytes, which are %99c", recvSize, *bufPtr);
+
+	if (recvSize > 0) {
 		int packet_length = readVarInt(&bufPtr);
 		int packet_length_length = bufPtr - buffer;
-		buffer = realloc(buffer, packet_length_length + packet_length);
+		buffer = (char*)realloc(buffer, packet_length_length + packet_length);
 		bufPtr = buffer + packet_length_length;
-
-		if (recv(conn->socket, buffer + MAX_VARINT_LEN, packet_length, 0) <= 0) {
-			log_error("bruh aint no wayy");
-			success = false;
-			goto end;
-		}
 
 		unsigned int packet_id = readVarInt(&bufPtr);
 		log_info("Packet Length: %u", packet_length);
 		log_info("Packet ID: %u", packet_id);
+
+		buffer = (char*)malloc(packet_length);
+		ssize_t recvSize = recv(conn->socket, bufPtr, packet_length, 0);
 		switch (conn->state) {
 			case HANDSHAKE:
 				switch (packet_id) {
-					case 0: handle_handshake(conn, &bufPtr); handle_status_request(conn, &bufPtr); break;
+					case 0: handle_handshake(conn, &bufPtr); break;
 					default:
 						log_error("Invalid packet ID: %i", packet_id);
 						success = false;
 						goto end;
 				}
-				break;
 			case STATUS:
 				switch (packet_id) {
 					case 0: handle_status_request(conn, &bufPtr); break;
@@ -115,6 +116,7 @@ bool handle_packet(connection* conn) {
 				break;
 		}
 	} else {
+		fprintf(stderr, "recv: %s (%d)\n", strerror(errno), errno);
 		success = false;
 	}
 

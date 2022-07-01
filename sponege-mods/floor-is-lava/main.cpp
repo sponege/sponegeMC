@@ -1,22 +1,5 @@
-// Creates new threads for incoming connections (gets piped into handle_packet)
-#include <netinet/in.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#include <pthread.h>
-#include "../config.h"
-#include "../logger/logger.h"
-#include "packet.h"
-
-struct socket_listener {
-	int server_fd, new_socket;
-	struct sockaddr_in address;
-	int opt;
-	int addrlen;
-};
+#include "./daniiMC.h"
+#include "./main.h"
 
 void createSocketListener(struct socket_listener *sock, uint16_t port) {
 	// Creating socket file descriptor
@@ -56,22 +39,19 @@ void createSocketListener(struct socket_listener *sock, uint16_t port) {
 	}
 }
 
-int getNewSocketConnection(struct socket_listener *sock) {
+void getNewSocketConnection(struct socket_listener *sock) {
 		sock->new_socket
 				= accept(sock->server_fd, (struct sockaddr*)&sock->address,
 								(socklen_t*)&sock->addrlen);
 }
 
 void *handle_connection(void *arg) {
-	connection connection = {
-		.socket = *((int*) arg),
-		.state = HANDSHAKE
-	};
-	log_info("New connection! Socket descriptor: %i", connection.socket);
+	int socket_fd = *((int*) arg);
+	log_info("New connection! Socket descriptor: %i", socket_fd);
 
-	while (handle_packet(&connection)) {}
+	while (handle_packet(socket_fd)) {}
 
-	log_info("Closing connection... Socket descriptor: %i", connection.socket);
+	log_info("Closing connection... Socket descriptor: %i", socket_fd);
 	// close(connection.socket);
 }
 
@@ -99,4 +79,8 @@ void* listen_for_incoming_connections() {
 int main(int argc, char const* argv[]) {
 	log_info("Starting socket listener...");
 	listen_for_incoming_connections();
+}
+
+bool handle_packet(int socket_fd) {
+	
 }

@@ -1,0 +1,8 @@
+!! Connection from 127.0.0.1:53366 to 127.0.0.1:25565 established.
+>> 00000000: 00 f6 05 09 6c 6f 63 61 6c 68 6f 73 74 63 dd 01    ....localhostc..
+
+!! End of packet 0.
+>> 00000000: 00                                                 .
+
+!! End of packet 0.
+!! Connection closed.

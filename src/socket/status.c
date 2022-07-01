@@ -39,51 +39,158 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+struct inf_buf { // infinite buffer, buffer with infinite length
+  char *buf;
+  size_t size;
+  FILE *stream;
+};
+void hexDump (
+    const char * desc,
+    const void * addr,
+    const int len,
+    int perLine
+) {
+    // Silently ignore silly per-line values.
+
+    if (perLine < 4 || perLine > 64) perLine = 16;
+
+    int i;
+    unsigned char buff[perLine+1];
+    const unsigned char * pc = (const unsigned char *)addr;
+
+    // Output description if given.
+
+    if (desc != NULL) printf ("%s:\n", desc);
+
+    // Length checks.
+
+    if (len == 0) {
+        printf("  ZERO LENGTH\n");
+        return;
+    }
+    if (len < 0) {
+        printf("  NEGATIVE LENGTH: %d\n", len);
+        return;
+    }
+
+    // Process every byte in the data.
+
+    for (i = 0; i < len; i++) {
+        // Multiple of perLine means new or first line (with line offset).
+
+        if ((i % perLine) == 0) {
+            // Only print previous-line ASCII buffer for lines beyond first.
+
+            if (i != 0) printf ("  %s\n", buff);
+
+            // Output the offset of current line.
+
+            printf ("  %04x ", i);
+        }
+
+        // Now the hex code for the specific character.
+
+        printf (" %02x", pc[i]);
+
+        // And buffer a printable ASCII character for later.
+
+        if ((pc[i] < 0x20) || (pc[i] > 0x7e)) // isprint() may be better.
+            buff[i % perLine] = '.';
+        else
+            buff[i % perLine] = pc[i];
+        buff[(i % perLine) + 1] = '\0';
+    }
+
+    // Pad out last line if not exactly perLine characters.
+
+    while ((i % perLine) != 0) {
+        printf ("   ");
+        i++;
+    }
+
+    // And print the final ASCII buffer.
+
+    printf ("  %s\n", buff);
+}
+
 void handle_status_request(connection *connection, char **bufPtr) {
+
+
   FILE *file;
-  int fs; // file size
-  int stream_size;
-  file = fopen("status.json", "r");
+  file = fopen("status2.json", "r");
   
   if (file == NULL) {
     puts("Error opening file, this is either because the file doesn't exist or you don't have permission to read the requested file.");
     return; // error opening file
   }
 
+  // TODO: cringe
+
+  long fs; // file size
+
   fseek(file, 0L, SEEK_END);
   fs = ftell(file);
   rewind(file);
 
-  if (fs == -1) {
+  /*if (fs == -1) {
     puts("That's a directory lol");
     return; // a directory was provided instead of a file
-  }
+  }*/
 
-  char *json = malloc(fs * sizeof(char)); // string with file contents
+  char *json = (char*)malloc(fs * sizeof(char)); // string with file contents
   fread(json, sizeof(char), fs, file); // read file into string
 
-  log_info("Writing json... %s", json);
+  fflush(file);
+  fclose(file);
+
+  // log_info("Writing json... %s", json);
   // https://wiki.vg/Protocol#Packet_format
-  char *bp;
-  size_t size;
-  FILE *stream;
+  
+  struct inf_buf packet = {.size = 0};
+  packet.stream = open_memstream(&packet.buf, &packet.size);
+  writeVarInt(0, packet.stream); // Packet ID
+  writeVarInt(fs, packet.stream); // String Length (JSON)
+	fprintf(packet.stream, "%s", json);
+  fflush(packet.stream);
+  fclose(packet.stream);
 
-  stream = open_memstream(&bp, &size);
+  log_pink("%s\nBuffer size: %lu\n", packet.buf + (packet.size - fs), packet.size);
 
-  writeVarInt(fs, stream); // Packet Length
-  writeVarInt(0, stream); // Packet ID
-  writeVarInt(fs, stream); // String Length (JSON)
-	fprintf(stream, json);
+  struct inf_buf packetHeader;
+  packetHeader.stream = open_memstream(&packetHeader.buf, &packetHeader.size);
+  writeVarInt(packet.size, packetHeader.stream); // Packet Length
+  fflush(packetHeader.stream);
+  fclose(packetHeader.stream);
 
-  fseek(stream, 0L, SEEK_END);
-  stream_size = ftell(stream);
-  rewind(stream);
+  send(connection->socket, packetHeader.buf, packetHeader.size, 0);
+  log_pink("lol %i lol %i lol", packet.size, fs);
+  send(connection->socket, packet.buf, packet.size, 0);
 
-  send(connection->socket, bp, stream_size, 0);
+  free(packet.buf);
+  free(json);
 
-  char *buf[1024] = {0};
-  recv(connection->socket, buf, 10, 0);
-  for (int i = 0; i < 10; i++) {
-    log_warn("%02x", buf[i]);
-  }
+  char* buffer = (char*)malloc(9999);
+	char* bufPt = buffer;
+	bool success = true;
+
+	ssize_t recvSize = recv(connection->socket, bufPt, 10, 0);
+
+	log_pink("recieved %zi bytes", recvSize);
+  hexDump("ping packet", (char*)bufPt, 100, 10);
+
+  send(connection->socket, (char*)bufPt, recvSize, 0);
+
+  // stream = open_memstream(&buf, &size);
+
+  // recv(connection->socket, buf, 10, 0);
+
+  // fflush(stream);
+  // fclose(stream);
+
+  // for (int i = 0; i < 10; i++) {
+  //   log_warn("%02x", buf[i]);
+  // }
+
+  // free(buf);
+
 }

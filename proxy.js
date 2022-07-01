@@ -7,8 +7,8 @@ const serverPort = 1337;
 // const serverPort = 25565;
 // const serverAddr = "127.0.0.1"; // actual localhost ip
 // const serverPort = 25565;
-const clientAddr = "mc.hypixel.net";
-// const clientAddr = "localhost";
+// const clientAddr = "mc.hypixel.net";
+const clientAddr = "localhost";
 const clientPort = 25563;
 
 // function toArrayBuffer(buf) {
@@ -156,14 +156,14 @@ const server = net.createServer((client) => {
   console.log("-- Client connected.");
 
   socket.on("data", (data) => {
-    console.log("<-", data);
+    console.log("<-", data.toString("hex").match(/../g).join(" "));
     toProcessClientBound = Buffer.concat([toProcessClientBound, data]);
     toProcessClientBound = processClientBoundBuffer(toProcessClientBound);
     client.write(data);
   });
 
   client.on("data", (data) => {
-    console.log("->", data);
+    console.log("->", data.toString("hex").match(/../g).join(" "));
     // sounds like a skill issue tbh
     toProcessServerBound = Buffer.concat([toProcessServerBound, data]);
     toProcessServerBound = processServerBoundBuffer(toProcessServerBound);
@@ -184,6 +184,12 @@ const server = net.createServer((client) => {
     console.log("-- Disconnected from server.");
     client.end();
   });
+
+  socket.on("error", console.log);
+
+  client.on("error", console.log);
 });
 
 server.listen(clientPort, clientAddr);
+
+server.on("error", console.log);
